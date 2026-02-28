@@ -13,6 +13,7 @@ Capacitor plugin for connecting and using services by Apple Game Center and Goog
 
 | Capacitor Version | Support Status |
 |-------------------|:--------------:|
+| Capacitor v8      |    TESTING     | 
 | Capacitor v7      |    TESTING     | 
 | Capacitor v6      |       ✅       | 
 | Capacitor v5      |       ✅       |
