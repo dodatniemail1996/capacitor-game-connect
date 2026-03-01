@@ -1,6 +1,6 @@
 {
   "name": "@ni2khanna/capacitor-game-connect",
-  "version": "8.0.1",
+  "version": "8.0.2",
   "description": "Use Game Services and Game Connect",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
