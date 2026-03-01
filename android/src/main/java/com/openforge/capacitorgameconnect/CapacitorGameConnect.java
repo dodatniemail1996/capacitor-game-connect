@@ -130,7 +130,6 @@ public class CapacitorGameConnect {
 
     /**
      * * Method to unlock an achievement
-     *
      */
     public void unlockAchievement(PluginCall call) {
         Log.i(TAG, "unlockAchievement has been called");
@@ -140,7 +139,6 @@ public class CapacitorGameConnect {
 
     /**
      * * Method to increment the progress of an achievement
-     *
      */
     public void incrementAchievementProgress(PluginCall call) {
         Log.i(TAG, "incrementAchievementProgress has been called");
@@ -151,7 +149,6 @@ public class CapacitorGameConnect {
 
     /**
      * * Method to get the total player score from a leaderboard
-     *
      */
     public void getUserTotalScore(PluginCall call) {
         Log.i(TAG, "getUserTotalScore has been called");
@@ -202,7 +199,6 @@ public class CapacitorGameConnect {
                         return;
                     }
 
-                    // Request server auth code for Firebase
                     String serverClientId = call.getString("serverClientId", "");
                     if (serverClientId.isEmpty()) {
                         call.reject("serverClientId is required for Google Play Games credential");
@@ -210,7 +206,7 @@ public class CapacitorGameConnect {
                     }
 
                     gamesSignInClient
-                        .requestServerSideAccess(serverClientId, /* forceRefreshToken */ false)
+                        .requestServerSideAccess(serverClientId, false)
                         .addOnCompleteListener(task -> {
                             if (task.isSuccessful()) {
                                 String serverAuthCode = task.getResult();
@@ -236,77 +232,75 @@ public class CapacitorGameConnect {
             });
     }
 
+    // Save to cloud
+    public void saveSnapshot(String snapshotName, String data, PluginCall call) {
+        SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
 
-// Save to cloud
-public void saveSnapshot(String snapshotName, String data, PluginCall call) {
-    SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
+        snapshotsClient.open(snapshotName, true, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
+            .addOnSuccessListener(dataOrConflict -> {
+                if (dataOrConflict.isConflict()) {
+                    Snapshot snapshot = dataOrConflict.getConflict().getServerSnapshot();
+                    resolveConflictAndSave(snapshotsClient, dataOrConflict.getConflict().getConflictId(), snapshot, data, call);
+                    return;
+                }
 
-    snapshotsClient.open(snapshotName, true, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
-        .addOnSuccessListener(dataOrConflict -> {
-            if (dataOrConflict.isConflict()) {
-                // Using MOST_RECENTLY_MODIFIED policy, so just take the most recent
-                Snapshot snapshot = dataOrConflict.getConflict().getMostRecentSnapshot();
-                resolveConflictAndSave(snapshotsClient, dataOrConflict.getConflict().getConflictId(), snapshot, data, call);
-                return;
-            }
-
-            Snapshot snapshot = dataOrConflict.getData();
-            try {
-                snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
-                SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
-                    .setDescription("Game save")
-                    .build();
-                snapshotsClient.commitAndClose(snapshot, metadataChange)
-                    .addOnSuccessListener(meta -> call.resolve())
-                    .addOnFailureListener(e -> call.reject("Save failed: " + e.getMessage()));
-            } catch (Exception e) {
-                call.reject("Error writing snapshot: " + e.getMessage());
-            }
-        })
-        .addOnFailureListener(e -> call.reject("Failed to open snapshot: " + e.getMessage()));
-}
-
-private void resolveConflictAndSave(SnapshotsClient client, String conflictId, Snapshot snapshot, String data, PluginCall call) {
-    try {
-        snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
-        SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
-            .setDescription("Game save")
-            .build();
-        client.resolveConflict(conflictId, snapshot.getSnapshotId(), snapshot.getSnapshotContents(), metadataChange)
-            .addOnSuccessListener(r -> call.resolve())
-            .addOnFailureListener(e -> call.reject("Conflict resolve failed: " + e.getMessage()));
-    } catch (Exception e) {
-        call.reject("Error resolving conflict: " + e.getMessage());
+                Snapshot snapshot = dataOrConflict.getData();
+                try {
+                    snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
+                    SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+                        .setDescription("Game save")
+                        .build();
+                    snapshotsClient.commitAndClose(snapshot, metadataChange)
+                        .addOnSuccessListener(meta -> call.resolve())
+                        .addOnFailureListener(e -> call.reject("Save failed: " + e.getMessage()));
+                } catch (Exception e) {
+                    call.reject("Error writing snapshot: " + e.getMessage());
+                }
+            })
+            .addOnFailureListener(e -> call.reject("Failed to open snapshot: " + e.getMessage()));
     }
-}
 
-// Load from cloud
-public void loadSnapshot(String snapshotName, PluginCall call) {
-    SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
+    private void resolveConflictAndSave(SnapshotsClient client, String conflictId, Snapshot snapshot, String data, PluginCall call) {
+        try {
+            snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
+            SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+                .setDescription("Game save")
+                .build();
+            client.resolveConflict(conflictId, snapshot.getSnapshotId(), snapshot.getSnapshotContents(), metadataChange)
+                .addOnSuccessListener(r -> call.resolve())
+                .addOnFailureListener(e -> call.reject("Conflict resolve failed: " + e.getMessage()));
+        } catch (Exception e) {
+            call.reject("Error resolving conflict: " + e.getMessage());
+        }
+    }
 
-    snapshotsClient.open(snapshotName, false, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
-        .addOnSuccessListener(dataOrConflict -> {
-            Snapshot snapshot = dataOrConflict.isConflict()
-                ? dataOrConflict.getConflict().getMostRecentSnapshot()
-                : dataOrConflict.getData();
+    // Load from cloud
+    public void loadSnapshot(String snapshotName, PluginCall call) {
+        SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
 
-            try {
-                byte[] bytes = snapshot.getSnapshotContents().readFully();
-                String data = new String(bytes, "UTF-8");
-                snapshotsClient.discardAndClose(snapshot);
+        snapshotsClient.open(snapshotName, false, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
+            .addOnSuccessListener(dataOrConflict -> {
+                Snapshot snapshot = dataOrConflict.isConflict()
+                    ? dataOrConflict.getConflict().getServerSnapshot()
+                    : dataOrConflict.getData();
 
+                try {
+                    byte[] bytes = snapshot.getSnapshotContents().readFully();
+                    String data = new String(bytes, "UTF-8");
+                    snapshotsClient.discardAndClose(snapshot);
+
+                    JSObject result = new JSObject();
+                    result.put("data", data);
+                    call.resolve(result);
+                } catch (Exception e) {
+                    call.reject("Error reading snapshot: " + e.getMessage());
+                }
+            })
+            .addOnFailureListener(e -> {
+                // Snapshot doesn't exist yet — fine for first launch
                 JSObject result = new JSObject();
-                result.put("data", data);
+                result.put("data", null);
                 call.resolve(result);
-            } catch (Exception e) {
-                call.reject("Error reading snapshot: " + e.getMessage());
-            }
-        })
-        .addOnFailureListener(e -> {
-            // Snapshot doesn't exist yet — that's fine for first launch
-            JSObject result = new JSObject();
-            result.put("data", null);
-            call.resolve(result);
-        });
-}
+            });
+    }
 }
