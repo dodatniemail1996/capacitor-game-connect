@@ -113,4 +113,24 @@ export class CapacitorGameConnectWeb
     console.info('getGooglePlayCredential function has been called', options);
     return Promise.reject('Google Play Games authentication not supported on web');
   }
+
+  /**
+   * * Method to save a snapshot to Google Play Games cloud (Android only)
+   *
+   * @returns Promise
+   */
+  async saveSnapshot(options: { snapshotName: string; data: string }): Promise<void> {
+    console.info('saveSnapshot function has been called', options);
+    throw this.unimplemented('saveSnapshot is not available on web.');
+  }
+
+  /**
+   * * Method to load a snapshot from Google Play Games cloud (Android only)
+   *
+   * @returns Promise
+   */
+  async loadSnapshot(options: { snapshotName: string }): Promise<{ data: string | null }> {
+    console.info('loadSnapshot function has been called', options);
+    throw this.unimplemented('loadSnapshot is not available on web.');
+  }
 }

@@ -78,4 +78,23 @@ export declare class CapacitorGameConnectWeb extends WebPlugin implements Capaci
         credential: string;
         providerId: string;
     }>;
+    /**
+     * * Method to save a snapshot to Google Play Games cloud (Android only)
+     *
+     * @returns Promise
+     */
+    saveSnapshot(options: {
+        snapshotName: string;
+        data: string;
+    }): Promise<void>;
+    /**
+     * * Method to load a snapshot from Google Play Games cloud (Android only)
+     *
+     * @returns Promise
+     */
+    loadSnapshot(options: {
+        snapshotName: string;
+    }): Promise<{
+        data: string | null;
+    }>;
 }

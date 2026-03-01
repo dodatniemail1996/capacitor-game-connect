@@ -142,6 +142,52 @@
         "docs": "* Method to get Google Play Games authentication credential",
         "complexTypes": [],
         "slug": "getgoogleplaycredential"
+      },
+      {
+        "name": "saveSnapshot",
+        "signature": "(options: { snapshotName: string; data: string; }) => Promise<void>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ snapshotName: string; data: string; }"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [
+          {
+            "name": "param",
+            "text": "options.snapshotName - unique name for the save slot (default: \"game-save\")"
+          },
+          {
+            "name": "param",
+            "text": "options.data - JSON string of the game state to persist"
+          }
+        ],
+        "docs": "* Method to save game data to a Google Play Games cloud snapshot\r\n* Android only — required for Google Play Games Level Up program",
+        "complexTypes": [],
+        "slug": "savesnapshot"
+      },
+      {
+        "name": "loadSnapshot",
+        "signature": "(options: { snapshotName: string; }) => Promise<{ data: string | null; }>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "{ snapshotName: string; }"
+          }
+        ],
+        "returns": "Promise<{ data: string | null; }>",
+        "tags": [
+          {
+            "name": "param",
+            "text": "options.snapshotName - name of the save slot to load"
+          }
+        ],
+        "docs": "* Method to load game data from a Google Play Games cloud snapshot\r\n* Android only — returns null if no snapshot exists yet (e.g. first install)",
+        "complexTypes": [],
+        "slug": "loadsnapshot"
       }
     ],
     "properties": []

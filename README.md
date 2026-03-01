@@ -374,11 +374,12 @@ getGooglePlayCredential(options: { serverClientId: string; }) => Promise<{ crede
 saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 ```
 
-* Method to save game data to a Google Play Games cloud snapshot (Android only)
+* Method to save game data to a Google Play Games cloud snapshot
+* Android only — required for Google Play Games Level Up program
 
-| Param         | Type                                                   |
-| ------------- | ------------------------------------------------------ |
-| **`options`** | <code>{ snapshotName: string; data: string; }</code>   |
+| Param         | Type                                                 |
+| ------------- | ---------------------------------------------------- |
+| **`options`** | <code>{ snapshotName: string; data: string; }</code> |
 
 --------------------
 
@@ -386,16 +387,17 @@ saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 ### loadSnapshot(...)
 
 ```typescript
-loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | null }>
+loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | null; }>
 ```
 
-* Method to load game data from a Google Play Games cloud snapshot (Android only). Returns `null` if no snapshot exists yet.
+* Method to load game data from a Google Play Games cloud snapshot
+* Android only — returns null if no snapshot exists yet (e.g. first install)
 
-| Param         | Type                                     |
-| ------------- | ---------------------------------------- |
-| **`options`** | <code>{ snapshotName: string; }</code>   |
+| Param         | Type                                   |
+| ------------- | -------------------------------------- |
+| **`options`** | <code>{ snapshotName: string; }</code> |
 
-**Returns:** <code>Promise&lt;{ data: string | null }&gt;</code>
+**Returns:** <code>Promise&lt;{ data: string | null; }&gt;</code>
 
 --------------------
 
