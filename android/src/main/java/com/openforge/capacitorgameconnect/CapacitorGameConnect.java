@@ -239,7 +239,7 @@ public class CapacitorGameConnect {
         snapshotsClient.open(snapshotName, true, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
             .addOnSuccessListener(dataOrConflict -> {
                 if (dataOrConflict.isConflict()) {
-                    Snapshot snapshot = dataOrConflict.getConflict().getServerSnapshot();
+                    Snapshot snapshot = dataOrConflict.getConflict().getSnapshot();
                     resolveConflictAndSave(snapshotsClient, dataOrConflict.getConflict().getConflictId(), snapshot, data, call);
                     return;
                 }
@@ -266,7 +266,7 @@ public class CapacitorGameConnect {
             SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
                 .setDescription("Game save")
                 .build();
-            client.resolveConflict(conflictId, snapshot.getSnapshotId(), snapshot.getSnapshotContents(), metadataChange)
+            client.resolveConflict(conflictId, snapshot)
                 .addOnSuccessListener(r -> call.resolve())
                 .addOnFailureListener(e -> call.reject("Conflict resolve failed: " + e.getMessage()));
         } catch (Exception e) {
@@ -281,7 +281,7 @@ public class CapacitorGameConnect {
         snapshotsClient.open(snapshotName, false, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
             .addOnSuccessListener(dataOrConflict -> {
                 Snapshot snapshot = dataOrConflict.isConflict()
-                    ? dataOrConflict.getConflict().getServerSnapshot()
+                    ? dataOrConflict.getConflict().getSnapshot()
                     : dataOrConflict.getData();
 
                 try {
