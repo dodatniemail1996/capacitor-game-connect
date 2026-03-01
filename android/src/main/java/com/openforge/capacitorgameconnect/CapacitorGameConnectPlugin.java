@@ -108,4 +108,21 @@ public class CapacitorGameConnectPlugin extends Plugin {
     public void getGooglePlayCredential(PluginCall call) {
         implementation.getGooglePlayCredential(call);
     }
+
+    @PluginMethod
+public void saveSnapshot(PluginCall call) {
+    String snapshotName = call.getString("snapshotName", "game-save");
+    String data = call.getString("data");
+    if (data == null) {
+        call.reject("data is required");
+        return;
+    }
+    implementation.saveSnapshot(snapshotName, data, call);
+}
+
+@PluginMethod
+public void loadSnapshot(PluginCall call) {
+    String snapshotName = call.getString("snapshotName", "game-save");
+    implementation.loadSnapshot(snapshotName, call);
+}
 }

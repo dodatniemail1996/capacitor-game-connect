@@ -7,7 +7,7 @@
 </p>
 
 # Introduction
-Capacitor plugin for connecting and using services by Apple Game Center and Google Play Game Services. Features included are access to Sign-In, Leaderboard, and Achievements.
+Capacitor plugin for connecting and using services by Apple Game Center and Google Play Game Services. Features included are access to Sign-In, Leaderboard, Achievements, and Cloud Save (Snapshots).
 
 ---
 
@@ -84,7 +84,7 @@ Follow this guide to configure correctly your Google Play Console to be able to 
 2. If you don't have an app created, create one as a Game.
 3. Go to Play Games Services under Grow section.
     - Cick Configuration
-    - Select the option 'No, my game doesn’t use Google APIs', set a name and click Create.
+    - Select the option 'No, my game doesn't use Google APIs', set a name and click Create.
 4. Let's create a OAuth consent screen in Google Cloud Platform:
     - Go to your [Google Cloud Platform](https://console.cloud.google.com/). Make sure you have selected the correct app you want to create the OAuth consent screen.
     - Go to APIs & Services section, then in the sidebar click on OAuth consent screen
@@ -141,6 +141,80 @@ Before use the `Achievement Methods` of the plugin, you need to setup your Achie
 6. Go to Services tab and configure both Leaderboards and Achievements
 7. Go back to App Store tab and select you Leaderboards and Achievements configurations
 
+## Cloud Save (Snapshots) — Android
+
+The plugin supports Google Play Games **Snapshots API** for cloud save, which is required by the [Google Play Games Level Up program](https://developer.android.com/games/guidelines). It allows players to back up and restore game progress across devices.
+
+### Enable Snapshots in the OAuth Consent Screen
+
+When setting up your OAuth consent screen (step 4 above), make sure the `drive.appdata` scope is included — this is what grants access to the Snapshots API.
+
+### Usage
+
+After signing in, you can back up and restore your game state as a JSON string.
+
+```typescript
+import { CapacitorGameConnect } from '@openforge/capacitor-game-connect';
+import { get, set } from 'idb-keyval';
+
+// Keys that should be backed up (must match your Zustand store keys)
+const STORE_KEYS = ['game-store', 'settings-store'];
+const SNAPSHOT_NAME = 'game-save';
+
+// Back up all stores to the cloud
+export async function backupToCloud(): Promise<void> {
+  const backup: Record<string, any> = {};
+  for (const key of STORE_KEYS) {
+    const value = await get(key);
+    if (value !== undefined) backup[key] = value;
+  }
+
+  await (CapacitorGameConnect as any).saveSnapshot({
+    snapshotName: SNAPSHOT_NAME,
+    data: JSON.stringify(backup),
+  });
+}
+
+// Restore all stores from the cloud. Returns true if data was found.
+export async function restoreFromCloud(): Promise<boolean> {
+  const result = await (CapacitorGameConnect as any).loadSnapshot({
+    snapshotName: SNAPSHOT_NAME,
+  });
+
+  if (!result.data) return false;
+
+  const backup = JSON.parse(result.data);
+  for (const [key, value] of Object.entries(backup)) {
+    await set(key, value as any);
+  }
+
+  return true;
+}
+```
+
+Call these after sign-in in your app bootstrap:
+
+```typescript
+await CapacitorGameConnect.signIn();
+
+const restored = await restoreFromCloud();
+if (restored) {
+  // Reload so Zustand picks up the restored IndexedDB data
+  window.location.reload();
+}
+
+// Call backupToCloud() after meaningful game events (level complete, purchase, etc.)
+await backupToCloud();
+```
+
+> **Note:** `saveSnapshot` and `loadSnapshot` are not yet in the plugin's TypeScript definitions. Until they are, cast the client as shown above or extend the type locally:
+> ```typescript
+> const GameConnect = CapacitorGameConnect as typeof CapacitorGameConnect & {
+>   saveSnapshot(options: { snapshotName: string; data: string }): Promise<void>;
+>   loadSnapshot(options: { snapshotName: string }): Promise<{ data: string | null }>;
+> };
+> ```
+
 ## API
 
 <docgen-index>
@@ -154,6 +228,8 @@ Before use the `Achievement Methods` of the plugin, you need to setup your Achie
 * [`getUserTotalScore(...)`](#getusertotalscore)
 * [`getGameCenterCredential()`](#getgamecentercredential)
 * [`getGooglePlayCredential(...)`](#getgoogleplaycredential)
+* [`saveSnapshot(...)`](#savesnapshot)
+* [`loadSnapshot(...)`](#loadsnapshot)
 * [Interfaces](#interfaces)
 
 </docgen-index>
@@ -288,6 +364,38 @@ getGooglePlayCredential(options: { serverClientId: string; }) => Promise<{ crede
 | **`options`** | <code>{ serverClientId: string; }</code> |
 
 **Returns:** <code>Promise&lt;{ credential: string; providerId: string; }&gt;</code>
+
+--------------------
+
+
+### saveSnapshot(...)
+
+```typescript
+saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
+```
+
+* Method to save game data to a Google Play Games cloud snapshot (Android only)
+
+| Param         | Type                                                   |
+| ------------- | ------------------------------------------------------ |
+| **`options`** | <code>{ snapshotName: string; data: string; }</code>   |
+
+--------------------
+
+
+### loadSnapshot(...)
+
+```typescript
+loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | null }>
+```
+
+* Method to load game data from a Google Play Games cloud snapshot (Android only). Returns `null` if no snapshot exists yet.
+
+| Param         | Type                                     |
+| ------------- | ---------------------------------------- |
+| **`options`** | <code>{ snapshotName: string; }</code>   |
+
+**Returns:** <code>Promise&lt;{ data: string | null }&gt;</code>
 
 --------------------
 

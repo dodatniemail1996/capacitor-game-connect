@@ -13,6 +13,12 @@ import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.leaderboard.LeaderboardVariant;
 import com.google.android.gms.games.AuthenticationResult;
 
+import com.google.android.gms.games.SnapshotsClient;
+import com.google.android.gms.games.snapshot.Snapshot;
+import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+
 public class CapacitorGameConnect {
 
     private AppCompatActivity activity;
@@ -229,4 +235,78 @@ public class CapacitorGameConnect {
                 call.reject("Error checking authentication status: " + e.getMessage());
             });
     }
+
+
+// Save to cloud
+public void saveSnapshot(String snapshotName, String data, PluginCall call) {
+    SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
+
+    snapshotsClient.open(snapshotName, true, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
+        .addOnSuccessListener(dataOrConflict -> {
+            if (dataOrConflict.isConflict()) {
+                // Using MOST_RECENTLY_MODIFIED policy, so just take the most recent
+                Snapshot snapshot = dataOrConflict.getConflict().getMostRecentSnapshot();
+                resolveConflictAndSave(snapshotsClient, dataOrConflict.getConflict().getConflictId(), snapshot, data, call);
+                return;
+            }
+
+            Snapshot snapshot = dataOrConflict.getData();
+            try {
+                snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
+                SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+                    .setDescription("Game save")
+                    .build();
+                snapshotsClient.commitAndClose(snapshot, metadataChange)
+                    .addOnSuccessListener(meta -> call.resolve())
+                    .addOnFailureListener(e -> call.reject("Save failed: " + e.getMessage()));
+            } catch (Exception e) {
+                call.reject("Error writing snapshot: " + e.getMessage());
+            }
+        })
+        .addOnFailureListener(e -> call.reject("Failed to open snapshot: " + e.getMessage()));
+}
+
+private void resolveConflictAndSave(SnapshotsClient client, String conflictId, Snapshot snapshot, String data, PluginCall call) {
+    try {
+        snapshot.getSnapshotContents().writeBytes(data.getBytes("UTF-8"));
+        SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+            .setDescription("Game save")
+            .build();
+        client.resolveConflict(conflictId, snapshot.getSnapshotId(), snapshot.getSnapshotContents(), metadataChange)
+            .addOnSuccessListener(r -> call.resolve())
+            .addOnFailureListener(e -> call.reject("Conflict resolve failed: " + e.getMessage()));
+    } catch (Exception e) {
+        call.reject("Error resolving conflict: " + e.getMessage());
+    }
+}
+
+// Load from cloud
+public void loadSnapshot(String snapshotName, PluginCall call) {
+    SnapshotsClient snapshotsClient = PlayGames.getSnapshotsClient(this.activity);
+
+    snapshotsClient.open(snapshotName, false, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
+        .addOnSuccessListener(dataOrConflict -> {
+            Snapshot snapshot = dataOrConflict.isConflict()
+                ? dataOrConflict.getConflict().getMostRecentSnapshot()
+                : dataOrConflict.getData();
+
+            try {
+                byte[] bytes = snapshot.getSnapshotContents().readFully();
+                String data = new String(bytes, "UTF-8");
+                snapshotsClient.discardAndClose(snapshot);
+
+                JSObject result = new JSObject();
+                result.put("data", data);
+                call.resolve(result);
+            } catch (Exception e) {
+                call.reject("Error reading snapshot: " + e.getMessage());
+            }
+        })
+        .addOnFailureListener(e -> {
+            // Snapshot doesn't exist yet — that's fine for first launch
+            JSObject result = new JSObject();
+            result.put("data", null);
+            call.resolve(result);
+        });
+}
 }
