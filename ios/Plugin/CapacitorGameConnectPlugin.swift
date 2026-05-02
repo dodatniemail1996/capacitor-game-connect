@@ -8,7 +8,23 @@ import GameKit
  */
 
 @objc(CapacitorGameConnectPlugin)
-public class CapacitorGameConnectPlugin: CAPPlugin {
+public class CapacitorGameConnectPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "CapacitorGameConnectPlugin"
+    public let jsName = "CapacitorGameConnect"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "signIn", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showLeaderboard", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showAchievements", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "submitScore", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "unlockAchievement", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "incrementAchievementProgress", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getUserTotalScore", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getGameCenterCredential", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getGooglePlayCredential", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveSnapshot", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "loadSnapshot", returnType: CAPPluginReturnPromise)
+    ]
+
     private let implementation = CapacitorGameConnect()
 
     @objc func signIn(_ call: CAPPluginCall) {
@@ -62,5 +78,13 @@ public class CapacitorGameConnectPlugin: CAPPlugin {
 
     @objc func getGooglePlayCredential(_ call: CAPPluginCall) {
         call.reject("Google Play Games not available on iOS")
+    }
+
+    @objc func saveSnapshot(_ call: CAPPluginCall) {
+        implementation.saveSnapshot(call)
+    }
+
+    @objc func loadSnapshot(_ call: CAPPluginCall) {
+        implementation.loadSnapshot(call)
     }
 }

@@ -23,7 +23,7 @@ import AuthenticationServices
             }
             return
         }
-        localPlayer.authenticateHandler = { [weak self] gcAuthVC, error in
+        localPlayer.authenticateHandler = { gcAuthVC, error in
             DispatchQueue.main.async {
                 if let error = error {
                     call.reject("Authentication failed: \(error.localizedDescription)")
@@ -217,6 +217,97 @@ import AuthenticationServices
                 "player_score": userTotalScore
             ]
             call.resolve(result as PluginCallResultData)
+        }
+    }
+
+    @objc func saveSnapshot(_ call: CAPPluginCall) {
+        let snapshotName = call.getString("snapshotName") ?? "game-save"
+
+        guard let dataString = call.getString("data") else {
+            call.reject("data is required")
+            return
+        }
+
+        guard GKLocalPlayer.local.isAuthenticated else {
+            call.reject("Player is not authenticated")
+            return
+        }
+
+        guard let data = dataString.data(using: .utf8) else {
+            call.reject("Could not encode snapshot data as UTF-8")
+            return
+        }
+
+        GKLocalPlayer.local.saveGameData(data, withName: snapshotName) { _, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    call.reject("Save failed: \(error.localizedDescription)")
+                } else {
+                    call.resolve()
+                }
+            }
+        }
+    }
+
+    @objc func loadSnapshot(_ call: CAPPluginCall) {
+        let snapshotName = call.getString("snapshotName") ?? "game-save"
+
+        guard GKLocalPlayer.local.isAuthenticated else {
+            call.reject("Player is not authenticated")
+            return
+        }
+
+        GKLocalPlayer.local.fetchSavedGames { [weak self] savedGames, error in
+            DispatchQueue.main.async {
+                guard let self = self else {
+                    call.reject("Plugin instance no longer available")
+                    return
+                }
+
+                if let error = error {
+                    call.reject("Failed to load snapshots: \(error.localizedDescription)")
+                    return
+                }
+
+                let matches = (savedGames ?? []).filter { $0.name == snapshotName }
+                if matches.isEmpty {
+                    call.resolve(["data": NSNull()])
+                    return
+                }
+
+                let selected = matches.max { lhs, rhs in
+                    lhs.modificationDate < rhs.modificationDate
+                } ?? matches[0]
+
+                selected.loadData { data, loadError in
+                    DispatchQueue.main.async {
+                        if let loadError = loadError {
+                            call.reject("Error reading snapshot: \(loadError.localizedDescription)")
+                            return
+                        }
+
+                        guard let data = data else {
+                            call.resolve(["data": NSNull()])
+                            return
+                        }
+
+                        let decoded = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+
+                        if matches.count > 1 {
+                            GKLocalPlayer.local.resolveConflictingSavedGames(matches, with: data) { _, resolveError in
+                                DispatchQueue.main.async {
+                                    if let resolveError = resolveError {
+                                        print("Failed to resolve snapshot conflicts: \(resolveError.localizedDescription)")
+                                    }
+                                    call.resolve(["data": decoded])
+                                }
+                            }
+                        } else {
+                            call.resolve(["data": decoded])
+                        }
+                    }
+                }
+            }
         }
     }
 }
