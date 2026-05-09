@@ -1,45 +1,118 @@
 import Foundation
+import UIKit
 import GameKit
 import Capacitor
 import AuthenticationServices
 
 @objc public class CapacitorGameConnect: NSObject, GKGameCenterControllerDelegate {
+    private var pendingSignInCalls: [CAPPluginCall] = []
+    private var isPresentingAuth = false
+
     public func gameCenterViewControllerDidFinish(_ gameCenterViewController: GKGameCenterViewController) {
         gameCenterViewController.dismiss(animated: true);
     }
+
+    private func topMostViewController(from root: UIViewController) -> UIViewController {
+        if let presented = root.presentedViewController {
+            return topMostViewController(from: presented)
+        }
+        if let nav = root as? UINavigationController, let visible = nav.visibleViewController {
+            return topMostViewController(from: visible)
+        }
+        if let tab = root as? UITabBarController, let selected = tab.selectedViewController {
+            return topMostViewController(from: selected)
+        }
+        return root
+    }
+
+    private func bestPresentingViewController(fallback: UIViewController) -> UIViewController {
+        if let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+           let window = scene.windows.first(where: { $0.isKeyWindow }),
+           let root = window.rootViewController {
+            return topMostViewController(from: root)
+        }
+        return topMostViewController(from: fallback)
+    }
+
     @objc func signIn(_ call: CAPPluginCall, _ viewController: UIViewController) {
         let localPlayer = GKLocalPlayer.local
 
-        //handle webview reload (mostly for debugging purposes)
-        //if handler is already set, return cached credentials
-        //TODO: we may want to store call objects and resolve them once auth is completed, but for debugging it's not needed
-        if localPlayer.authenticateHandler != nil {
-            DispatchQueue.main.async {
-                let result = [
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            call.keepAlive = true
+            self.pendingSignInCalls.append(call)
+
+            if localPlayer.isAuthenticated {
+                let result: [String: Any] = [
                     "player_name": localPlayer.displayName,
                     "player_id": localPlayer.gamePlayerID
                 ]
-                call.resolve(result)
+                let calls = self.pendingSignInCalls
+                self.pendingSignInCalls.removeAll()
+                calls.forEach { c in
+                    c.keepAlive = false
+                    c.resolve(result)
+                }
+                return
             }
-            return
-        }
-        localPlayer.authenticateHandler = { gcAuthVC, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    call.reject("Authentication failed: \(error.localizedDescription)")
-                    return
+
+            if localPlayer.authenticateHandler == nil {
+                localPlayer.authenticateHandler = { [weak self] gcAuthVC, error in
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+
+                        if let error = error {
+                            let calls = self.pendingSignInCalls
+                            self.pendingSignInCalls.removeAll()
+                            self.isPresentingAuth = false
+                            calls.forEach { c in
+                                c.keepAlive = false
+                                c.reject("Authentication failed: \(error.localizedDescription)")
+                            }
+                            return
+                        }
+
+                        if localPlayer.isAuthenticated {
+                            let result: [String: Any] = [
+                                "player_name": localPlayer.displayName,
+                                "player_id": localPlayer.gamePlayerID
+                            ]
+                            let calls = self.pendingSignInCalls
+                            self.pendingSignInCalls.removeAll()
+                            self.isPresentingAuth = false
+                            calls.forEach { c in
+                                c.keepAlive = false
+                                c.resolve(result)
+                            }
+                            return
+                        }
+
+                        if let gcAuthVC = gcAuthVC {
+                            // Present auth UI from the currently top-most VC (scene-safe).
+                            if !self.isPresentingAuth {
+                                self.isPresentingAuth = true
+                                let presenter = self.bestPresentingViewController(fallback: viewController)
+                                presenter.present(gcAuthVC, animated: true)
+                            }
+                            return
+                        }
+
+                        // No UI to present and still not authenticated (often means user canceled / restrictions).
+                        let calls = self.pendingSignInCalls
+                        self.pendingSignInCalls.removeAll()
+                        self.isPresentingAuth = false
+                        calls.forEach { c in
+                            c.keepAlive = false
+                            c.reject("[GameServices] local player is not authenticated")
+                        }
+                    }
                 }
-                if localPlayer.isAuthenticated {
-                    let result = [
-                        "player_name": localPlayer.displayName,
-                        "player_id": localPlayer.gamePlayerID
-                    ]
-                    call.resolve(result)
-                } else if let gcAuthVC = gcAuthVC {
-                    viewController.present(gcAuthVC, animated: true)
-                } else {
-                    call.reject("[GameServices] local player is not authenticated")
-                }
+            } else if !self.isPresentingAuth {
+                // Handler exists but player isn't authenticated yet.
+                // Do nothing: the existing handler will eventually supply a view controller or auth result.
             }
         }
     }

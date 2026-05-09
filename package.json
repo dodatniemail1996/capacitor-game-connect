@@ -1,6 +1,6 @@
 {
   "name": "@ni2khanna/capacitor-game-connect",
-  "version": "8.0.6",
+  "version": "8.0.7",
   "description": "Use Game Services and Game Connect",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -11,6 +11,7 @@
     "android/build.gradle",
     "dist/",
     "ios/Plugin/",
+    "ios/Package.swift",
     "Ni2khannaCapacitorGameConnect.podspec"
   ],
   "author": "OpenForge LLC",

@@ -164,7 +164,7 @@
             "text": "options.data - JSON string of the game state to persist"
           }
         ],
-        "docs": "* Method to save game data to a Google Play Games cloud snapshot\r\n* Android only — required for Google Play Games Level Up program",
+        "docs": "* Method to save game data to a Google Play Games cloud snapshot\n* Android only — required for Google Play Games Level Up program",
         "complexTypes": [],
         "slug": "savesnapshot"
       },
@@ -185,7 +185,7 @@
             "text": "options.snapshotName - name of the save slot to load"
           }
         ],
-        "docs": "* Method to load game data from a Google Play Games cloud snapshot\r\n* Android only — returns null if no snapshot exists yet (e.g. first install)",
+        "docs": "* Method to load game data from a Google Play Games cloud snapshot\n* Android only — returns null if no snapshot exists yet (e.g. first install)",
         "complexTypes": [],
         "slug": "loadsnapshot"
       }
