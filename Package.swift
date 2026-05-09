@@ -1,15 +1,17 @@
 // swift-tools-version:5.9
 import PackageDescription
 
+// Capacitor SPM expects plugins to expose Package.swift at the npm package root
+// (same folder as package.json), so the Capacitor CLI can add it via a local `path:`.
 let package = Package(
-    name: "CapacitorGameConnect",
+    name: "Ni2khannaCapacitorGameConnect",
     platforms: [
         .iOS(.v14)
     ],
     products: [
         .library(
-            name: "CapacitorGameConnect",
-            targets: ["CapacitorGameConnect"]
+            name: "Ni2khannaCapacitorGameConnect",
+            targets: ["Ni2khannaCapacitorGameConnect"]
         )
     ],
     dependencies: [
@@ -17,11 +19,11 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "CapacitorGameConnect",
+            name: "Ni2khannaCapacitorGameConnect",
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm")
             ],
-            path: "Plugin",
+            path: "ios/Plugin",
             exclude: [
                 "CapacitorGameConnectPlugin.m",
                 "CapacitorGameConnectPlugin.h",

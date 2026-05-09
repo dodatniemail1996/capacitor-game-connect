@@ -11,7 +11,7 @@
     "android/build.gradle",
     "dist/",
     "ios/Plugin/",
-    "ios/Package.swift",
+    "Package.swift",
     "Ni2khannaCapacitorGameConnect.podspec"
   ],
   "author": "OpenForge LLC",
@@ -80,7 +80,7 @@
   "capacitor": {
     "ios": {
       "src": "ios",
-       "SPMPackage": {
+      "SPMPackage": {
         "name": "CapacitorGameConnect"
       }
     },
@@ -89,6 +89,7 @@
     }
   },
   "dependencies": {
-    "@capacitor/cli": "^8.0.0"
+    "@capacitor/cli": "^8.0.0",
+    "@ni2khanna/capacitor-game-connect": "github:dodatniemail1996/capacitor-game-connect"
   }
 }
