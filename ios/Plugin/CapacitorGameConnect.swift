@@ -1,8 +1,11 @@
 import Foundation
-import UIKit
 import GameKit
 import Capacitor
 import AuthenticationServices
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @objc public class CapacitorGameConnect: NSObject, GKGameCenterControllerDelegate {
     private var pendingSignInCalls: [CAPPluginCall] = []
@@ -26,6 +29,7 @@ import AuthenticationServices
     }
 
     private func bestPresentingViewController(fallback: UIViewController) -> UIViewController {
+#if canImport(UIKit)
         if let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }),
@@ -33,6 +37,7 @@ import AuthenticationServices
            let root = window.rootViewController {
             return topMostViewController(from: root)
         }
+#endif
         return topMostViewController(from: fallback)
     }
 
@@ -349,7 +354,7 @@ import AuthenticationServices
                 }
 
                 let selected = matches.max { lhs, rhs in
-                    lhs.modificationDate < rhs.modificationDate
+                    (lhs.modificationDate ?? .distantPast) < (rhs.modificationDate ?? .distantPast)
                 } ?? matches[0]
 
                 selected.loadData { data, loadError in
