@@ -46,7 +46,7 @@ Checkout these existing Ionic/Angular/Capacitor mobile game with the plugin inst
 ## Install
 
 ```bash
-npm install github:dodatniemail1996/capacitor-game-connect
+npm install @openforge/capacitor-game-connect
 npx cap sync
 ```
 
@@ -143,15 +143,19 @@ Before use the `Achievement Methods` of the plugin, you need to setup your Achie
 
 ### 2. Add iCloud Capability (required for Cloud Save)
 
-Cloud Save on iOS uses Apple's GameKit Saved Games API, which stores data in iCloud. For it to work, the device must be signed into iCloud and the app must have the iCloud Documents entitlement.
+Cloud Save on iOS uses Apple's GameKit Saved Games API, which stores data in iCloud. For it to work, the device must be signed into iCloud and the app must have the iCloud Documents entitlement with a registered container.
 
 1. In Xcode, go to your app Target → **Signing & Capabilities**
 2. Click **+ Capability** and add **iCloud**
 3. Under the iCloud capability, check ☑️ **iCloud Documents**
-4. Leave **Key-Value Storage** and **CloudKit** unchecked — they are not needed for GameKit saves
-5. You do **not** need to add a custom container. GameKit manages its own internal iCloud container automatically
+4. Under **Containers**, click the **+** button and add the default container Xcode suggests: `iCloud.$(CFBundleIdentifier)` (e.g. `iCloud.com.yourcompany.yourgame`)
+5. Let Xcode provision it — it will update your provisioning profile automatically
+6. Leave **Key-Value Storage** and **CloudKit** unchecked — they are not needed for GameKit saves
+7. Clean build folder (**Product → Clean Build Folder**) and rebuild
 
-> **Note:** Key-Value Storage is for small key/value pairs synced via `NSUbiquitousKeyValueStore`. CloudKit is for apps that use `CKRecord` directly. Neither is required here — `iCloud Documents` is the only entitlement GameKit's Saved Games API needs.
+> **Important:** Even though GameKit manages its own iCloud storage internally, Xcode still requires at least one container to be listed for the entitlement to be fully provisioned. Without a container, iCloud will never activate for your app at runtime and every save will return `GKError code 27`.
+
+> **Note:** Key-Value Storage is for small key/value pairs synced via `NSUbiquitousKeyValueStore`. CloudKit is for apps that use `CKRecord` directly. Neither is required here — `iCloud Documents` with a container is the only configuration GameKit's Saved Games API needs.
 
 Your `.entitlements` file should contain the following after completing the steps above:
 
@@ -159,6 +163,10 @@ Your `.entitlements` file should contain the following after completing the step
 <key>com.apple.developer.icloud-services</key>
 <array>
     <string>CloudDocuments</string>
+</array>
+<key>com.apple.developer.icloud-container-identifiers</key>
+<array>
+    <string>iCloud.com.yourcompany.yourgame</string>
 </array>
 ```
 
