@@ -168,7 +168,7 @@ import UIKit
     }
 
     @objc func showLeaderboard(_ call: CAPPluginCall, _ viewController: UIViewController) {
-        let leaderboardID = String(call.getString("leaderboardID") ?? "") // Property to get the leaderboard ID
+        let leaderboardID = String(call.getString("leaderboardID") ?? "")
         DispatchQueue.main.async {
             let leaderboardViewController = GKGameCenterViewController()
             leaderboardViewController.viewState = .leaderboards
@@ -196,8 +196,8 @@ import UIKit
     }
 
     @objc func submitScore(_ call: CAPPluginCall) {
-        let leaderboardID = String(call.getString("leaderboardID") ?? "") // Property to get the leaderboard ID
-        let score = Int64(call.getInt("totalScoreAmount") ?? 0) // Property to get the total score to submit
+        let leaderboardID = String(call.getString("leaderboardID") ?? "")
+        let score = Int64(call.getInt("totalScoreAmount") ?? 0)
 
         guard GKLocalPlayer.local.isAuthenticated else {
             print("Player is not authenticated")
@@ -213,7 +213,6 @@ import UIKit
 
         GKScore.report(scoreArray, withCompletionHandler: { error in
             if let error = error {
-                // Handle score submission error
                 print("Score submission failed with error: \(error.localizedDescription)")
                 call.reject("Score submission failed, try again.")
             } else {
@@ -221,7 +220,6 @@ import UIKit
                     "type": "success",
                     "message": "Score has been submitted successfully"
                 ]
-                // Score submitted successfully
                 print("Score submitted")
                 call.resolve(result as PluginCallResultData)
             }
@@ -229,8 +227,8 @@ import UIKit
     }
 
     @objc func unlockAchievement(_ call: CAPPluginCall) {
-            print("unlockAchievement:called")
-            setProgressAchievement(call, 100.0)
+        print("unlockAchievement:called")
+        setProgressAchievement(call, 100.0)
     }
 
     @objc func incrementAchievementProgress(_ call: CAPPluginCall) {
@@ -277,12 +275,12 @@ import UIKit
             return
         }
 
-        let leaderboardID = String(call.getString("leaderboardID") ?? "") // * Property to get the leaderboard ID
-        let leaderboard = GKLeaderboard() // * LeaderBoard functions
-        var userTotalScore = 0 // * Property to store user total score
-        leaderboard.identifier = leaderboardID // * LeaderBoard we are going to use for
-        leaderboard.playerScope = .global // * Section to use
-        leaderboard.timeScope = .allTime // * Time to search for
+        let leaderboardID = String(call.getString("leaderboardID") ?? "")
+        let leaderboard = GKLeaderboard()
+        var userTotalScore = 0
+        leaderboard.identifier = leaderboardID
+        leaderboard.playerScope = .global
+        leaderboard.timeScope = .allTime
 
         leaderboard.loadScores { (scores, error) in
             let hasScore = scores ?? nil
@@ -319,6 +317,11 @@ import UIKit
             return
         }
 
+        guard FileManager.default.ubiquityIdentityToken != nil else {
+            call.reject("iCloud is not available. Please sign in to iCloud and enable iCloud Drive in Settings.")
+            return
+        }
+
         guard let data = dataString.data(using: .utf8) else {
             call.reject("Could not encode snapshot data as UTF-8")
             return
@@ -327,6 +330,11 @@ import UIKit
         GKLocalPlayer.local.saveGameData(data, withName: snapshotName) { _, error in
             DispatchQueue.main.async { [weak self] in
                 if let error = error {
+                    let gkError = error as? GKError
+                    if gkError?.code == .notSupported || (error as NSError).code == 27 {
+                        call.reject("iCloud is not available. Please sign in to iCloud and enable iCloud Drive in Settings.")
+                        return
+                    }
                     let details = self?.describeGameKitError(error) ?? error.localizedDescription
                     call.reject("Save failed: \(details)")
                 } else {
@@ -344,63 +352,84 @@ import UIKit
             return
         }
 
-        GKLocalPlayer.local.fetchSavedGames { [weak self] savedGames, error in
-            DispatchQueue.main.async {
-                guard let self = self else {
-                    call.reject("Plugin instance no longer available")
-                    return
-                }
+        fetchWithRetry(snapshotName: snapshotName, call: call, attempt: 0)
+    }
 
-                if let error = error {
-                    call.reject("Failed to load snapshots: \(self.describeGameKitError(error))")
-                    return
-                }
+    // MARK: - Private: loadSnapshot retry logic
 
-                guard let savedGames = savedGames else {
-                    // No error, but no saved games available (can happen if Saved Games/iCloud isn't available).
-                    call.resolve(["data": NSNull()])
-                    return
-                }
+    /// Retries fetchSavedGames up to 4 times with increasing delays.
+    /// This handles the race condition where iCloud has not finished syncing
+    /// metadata by the time loadSnapshot is called after sign-in.
+    private func fetchWithRetry(snapshotName: String, call: CAPPluginCall, attempt: Int) {
+        let maxAttempts = 4
+        let delays: [Double] = [0.0, 1.5, 3.0, 5.0] // seconds before each attempt
+        let delay = attempt < delays.count ? delays[attempt] : 5.0
 
-                let matches = savedGames.filter { $0.name == snapshotName }
-                if matches.isEmpty {
-                    call.resolve(["data": NSNull()])
-                    return
-                }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
 
-                let selected = matches.max { lhs, rhs in
-                    (lhs.modificationDate ?? .distantPast) < (rhs.modificationDate ?? .distantPast)
-                } ?? matches[0]
+            GKLocalPlayer.local.fetchSavedGames { savedGames, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        call.reject("Failed to load snapshots: \(self.describeGameKitError(error))")
+                        return
+                    }
 
-                selected.loadData { data, loadError in
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else {
-                            call.reject("Plugin instance no longer available")
-                            return
-                        }
-                        if let loadError = loadError {
-                            call.reject("Error reading snapshot: \(self.describeGameKitError(loadError))")
-                            return
-                        }
+                    let matches = (savedGames ?? []).filter { $0.name == snapshotName }
 
-                        guard let data = data else {
-                            call.resolve(["data": NSNull()])
-                            return
-                        }
-
-                        let decoded = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
-
-                        if matches.count > 1 {
-                            GKLocalPlayer.local.resolveConflictingSavedGames(matches, with: data) { _, resolveError in
-                                DispatchQueue.main.async {
-                                    if let resolveError = resolveError {
-                                        print("Failed to resolve snapshot conflicts: \(self.describeGameKitError(resolveError))")
-                                    }
-                                    call.resolve(["data": decoded])
-                                }
-                            }
+                    // No matching save found — retry if attempts remain.
+                    // An empty list can mean iCloud hasn't synced yet, not necessarily
+                    // that no save exists.
+                    if matches.isEmpty {
+                        if attempt + 1 < maxAttempts {
+                            print("[GameServices] No snapshot found on attempt \(attempt + 1), retrying in \(delays[min(attempt + 1, delays.count - 1)])s...")
+                            self.fetchWithRetry(snapshotName: snapshotName, call: call, attempt: attempt + 1)
                         } else {
-                            call.resolve(["data": decoded])
+                            print("[GameServices] No snapshot found after \(maxAttempts) attempts, resolving nil")
+                            call.resolve(["data": NSNull()])
+                        }
+                        return
+                    }
+
+                    // Pick the most recently modified save
+                    let selected = matches.max {
+                        ($0.modificationDate ?? .distantPast) < ($1.modificationDate ?? .distantPast)
+                    } ?? matches[0]
+
+                    selected.loadData { data, loadError in
+                        DispatchQueue.main.async {
+                            if let loadError = loadError {
+                                // Data load failed — retry
+                                if attempt + 1 < maxAttempts {
+                                    print("[GameServices] Snapshot data load error on attempt \(attempt + 1), retrying: \(self.describeGameKitError(loadError))")
+                                    self.fetchWithRetry(snapshotName: snapshotName, call: call, attempt: attempt + 1)
+                                } else {
+                                    call.reject("Error reading snapshot: \(self.describeGameKitError(loadError))")
+                                }
+                                return
+                            }
+
+                            guard let data = data else {
+                                call.resolve(["data": NSNull()])
+                                return
+                            }
+
+                            let decoded = String(data: data, encoding: .utf8)
+                                ?? String(decoding: data, as: UTF8.self)
+
+                            // Resolve conflicts if multiple saves exist with the same name
+                            if matches.count > 1 {
+                                GKLocalPlayer.local.resolveConflictingSavedGames(matches, with: data) { _, resolveError in
+                                    DispatchQueue.main.async {
+                                        if let resolveError = resolveError {
+                                            print("[GameServices] Failed to resolve snapshot conflicts: \(self.describeGameKitError(resolveError))")
+                                        }
+                                        call.resolve(["data": decoded])
+                                    }
+                                }
+                            } else {
+                                call.resolve(["data": decoded])
+                            }
                         }
                     }
                 }

@@ -434,9 +434,8 @@ getGooglePlayCredential(options: { serverClientId: string; }) => Promise<{ crede
 saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 ```
 
-* Method to save game data to the cloud.
-* On **Android**, uses the Google Play Games Snapshots API (backed by Google Drive `appdata`).
-* On **iOS**, uses Apple GameKit Saved Games (backed by iCloud). Requires the iCloud Documents entitlement and the device to be signed into iCloud.
+* Method to save game data to a Google Play Games cloud snapshot
+* Android only — required for Google Play Games Level Up program
 
 | Param         | Type                                                 |
 | ------------- | ---------------------------------------------------- |
@@ -451,10 +450,8 @@ saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | null; }>
 ```
 
-* Method to load game data from the cloud.
-* On **Android**, reads from the Google Play Games Snapshots API.
-* On **iOS**, reads from Apple GameKit Saved Games (iCloud). Returns `{ data: null }` if no save exists yet or if iCloud is unavailable.
-* Conflict resolution (multiple saves with the same name) is handled automatically — the most recently modified save is used.
+* Method to load game data from a Google Play Games cloud snapshot
+* Android only — returns null if no snapshot exists yet (e.g. first install)
 
 | Param         | Type                                   |
 | ------------- | -------------------------------------- |
