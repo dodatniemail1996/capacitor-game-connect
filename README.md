@@ -46,7 +46,7 @@ Checkout these existing Ionic/Angular/Capacitor mobile game with the plugin inst
 ## Install
 
 ```bash
-npm install @openforge/capacitor-game-connect
+npm install github:dodatniemail1996/capacitor-game-connect
 npx cap sync
 ```
 
@@ -131,27 +131,77 @@ Before use the `Achievement Methods` of the plugin, you need to setup your Achie
 4. Click Achievements and configure it by filling the fields. Then click save and publish your changes
 5. Make sure all your changes are published by going to the Publishing section.
 
+---
+
 ## Setup for iOS
 
-1. Click on Target App in xcode
-2. Add team to Signing and Capabilities
-3. Add Game Center Capability
-4. Go to your Apps in https://appstoreconnect.apple.com/ and add your application
-5. Scroll down in your App Store tab from your application view and check the Game Center field
-6. Go to Services tab and configure both Leaderboards and Achievements
-7. Go back to App Store tab and select you Leaderboards and Achievements configurations
+### 1. Add Game Center Capability
 
-## Cloud Save (Snapshots) — Android
+1. Open your project in Xcode and select your app Target
+2. Add your Team under **Signing & Capabilities**
+3. Click **+ Capability** and add **Game Center**
 
-The plugin supports Google Play Games **Snapshots API** for cloud save, which is required by the [Google Play Games Level Up program](https://developer.android.com/games/guidelines). It allows players to back up and restore game progress across devices.
+### 2. Add iCloud Capability (required for Cloud Save)
 
-### Enable Snapshots in the OAuth Consent Screen
+Cloud Save on iOS uses Apple's GameKit Saved Games API, which stores data in iCloud. For it to work, the device must be signed into iCloud and the app must have the iCloud Documents entitlement.
 
-When setting up your OAuth consent screen (step 4 above), make sure the `drive.appdata` scope is included — this is what grants access to the Snapshots API.
+1. In Xcode, go to your app Target → **Signing & Capabilities**
+2. Click **+ Capability** and add **iCloud**
+3. Under the iCloud capability, check ☑️ **iCloud Documents**
+4. Leave **Key-Value Storage** and **CloudKit** unchecked — they are not needed for GameKit saves
+5. You do **not** need to add a custom container. GameKit manages its own internal iCloud container automatically
+
+> **Note:** Key-Value Storage is for small key/value pairs synced via `NSUbiquitousKeyValueStore`. CloudKit is for apps that use `CKRecord` directly. Neither is required here — `iCloud Documents` is the only entitlement GameKit's Saved Games API needs.
+
+Your `.entitlements` file should contain the following after completing the steps above:
+
+```xml
+<key>com.apple.developer.icloud-services</key>
+<array>
+    <string>CloudDocuments</string>
+</array>
+```
+
+### 3. Configure App Store Connect
+
+1. Go to your Apps at [App Store Connect](https://appstoreconnect.apple.com/) and select your application
+2. In the **App Store** tab, scroll down and check the **Game Center** field
+3. Go to the **Services** tab and configure your Leaderboards and Achievements
+4. Go back to the **App Store** tab and link your Leaderboard and Achievement configurations
+
+### Common iCloud Error
+
+If `saveSnapshot` returns `GKError code 27`, it means iCloud is not available on the device. Ask the user to:
+- Sign into iCloud: **Settings → [Name] → iCloud**
+- Enable iCloud Drive: **Settings → [Name] → iCloud → iCloud Drive**
+
+---
+
+## Cloud Save (Snapshots)
+
+Cloud Save lets players back up and restore game progress across devices. The plugin exposes `saveSnapshot` and `loadSnapshot` on both iOS and Android, but each platform uses a different underlying service.
+
+### How It Works Per Platform
+
+| | iOS | Android |
+|---|---|---|
+| **Backed by** | Apple GameKit Saved Games (iCloud) | Google Play Games Snapshots API (Google Drive `appdata`) |
+| **Requirement** | Device signed into iCloud + iCloud Documents entitlement | `drive.appdata` scope added to OAuth consent screen |
+| **Data format** | Any UTF-8 string (typically JSON) | Any UTF-8 string (typically JSON) |
+| **Conflict handling** | Plugin auto-resolves by picking the most recently modified save | Handled by Google Play Games |
+| **First install (no save)** | Returns `{ data: null }` | Returns `{ data: null }` |
+
+### Enable Cloud Save on Android
+
+When setting up your OAuth consent screen (step 4 of Android setup above), make sure the `drive.appdata` scope is included. This is what grants the Snapshots API access to Google Drive's hidden app data folder.
+
+### Enable Cloud Save on iOS
+
+Add the **iCloud Documents** capability in Xcode as described in the iOS setup section above. No additional App Store Connect configuration is needed beyond enabling Game Center.
 
 ### Usage
 
-After signing in, you can back up and restore your game state as a JSON string.
+After signing in, you can back up and restore your game state as a JSON string. The same code works on both platforms.
 
 ```typescript
 import { CapacitorGameConnect } from '@openforge/capacitor-game-connect';
@@ -214,6 +264,8 @@ await backupToCloud();
 >   loadSnapshot(options: { snapshotName: string }): Promise<{ data: string | null }>;
 > };
 > ```
+
+---
 
 ## API
 
@@ -374,8 +426,9 @@ getGooglePlayCredential(options: { serverClientId: string; }) => Promise<{ crede
 saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 ```
 
-* Method to save game data to a Google Play Games cloud snapshot
-* Android only — required for Google Play Games Level Up program
+* Method to save game data to the cloud.
+* On **Android**, uses the Google Play Games Snapshots API (backed by Google Drive `appdata`).
+* On **iOS**, uses Apple GameKit Saved Games (backed by iCloud). Requires the iCloud Documents entitlement and the device to be signed into iCloud.
 
 | Param         | Type                                                 |
 | ------------- | ---------------------------------------------------- |
@@ -390,8 +443,10 @@ saveSnapshot(options: { snapshotName: string; data: string; }) => Promise<void>
 loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | null; }>
 ```
 
-* Method to load game data from a Google Play Games cloud snapshot
-* Android only — returns null if no snapshot exists yet (e.g. first install)
+* Method to load game data from the cloud.
+* On **Android**, reads from the Google Play Games Snapshots API.
+* On **iOS**, reads from Apple GameKit Saved Games (iCloud). Returns `{ data: null }` if no save exists yet or if iCloud is unavailable.
+* Conflict resolution (multiple saves with the same name) is handled automatically — the most recently modified save is used.
 
 | Param         | Type                                   |
 | ------------- | -------------------------------------- |
@@ -418,3 +473,6 @@ loadSnapshot(options: { snapshotName: string; }) => Promise<{ data: string | nul
 ### Android
 In order to test the functionality, you must have a physical Android device. Trying to connect to Google Play Services through Android Studio Emulator/Simulator will not work.
 Note: Certain functionality may require having to sign your APK when building to your device.
+
+### iOS
+Cloud Save requires a physical device signed into iCloud. It cannot be tested in the Simulator as iCloud services are not available in the iOS Simulator.
