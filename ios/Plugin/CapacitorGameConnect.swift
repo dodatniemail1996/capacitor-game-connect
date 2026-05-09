@@ -11,6 +11,14 @@ import UIKit
     private var pendingSignInCalls: [CAPPluginCall] = []
     private var isPresentingAuth = false
 
+    private func describeGameKitError(_ error: Error) -> String {
+        if let gkError = error as? GKError {
+            return "\(gkError.localizedDescription) (GKError code \(gkError.code.rawValue))"
+        }
+        let nsError = error as NSError
+        return "\(nsError.localizedDescription) (\(nsError.domain) code \(nsError.code))"
+    }
+
     public func gameCenterViewControllerDidFinish(_ gameCenterViewController: GKGameCenterViewController) {
         gameCenterViewController.dismiss(animated: true);
     }
@@ -319,7 +327,7 @@ import UIKit
         GKLocalPlayer.local.saveGameData(data, withName: snapshotName) { _, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    call.reject("Save failed: \(error.localizedDescription)")
+                    call.reject("Save failed: \(describeGameKitError(error))")
                 } else {
                     call.resolve()
                 }
@@ -343,11 +351,17 @@ import UIKit
                 }
 
                 if let error = error {
-                    call.reject("Failed to load snapshots: \(error.localizedDescription)")
+                    call.reject("Failed to load snapshots: \(describeGameKitError(error))")
                     return
                 }
 
-                let matches = (savedGames ?? []).filter { $0.name == snapshotName }
+                guard let savedGames = savedGames else {
+                    // No error, but no saved games available (can happen if Saved Games/iCloud isn't available).
+                    call.resolve(["data": NSNull()])
+                    return
+                }
+
+                let matches = savedGames.filter { $0.name == snapshotName }
                 if matches.isEmpty {
                     call.resolve(["data": NSNull()])
                     return
@@ -360,7 +374,7 @@ import UIKit
                 selected.loadData { data, loadError in
                     DispatchQueue.main.async {
                         if let loadError = loadError {
-                            call.reject("Error reading snapshot: \(loadError.localizedDescription)")
+                            call.reject("Error reading snapshot: \(describeGameKitError(loadError))")
                             return
                         }
 
@@ -375,7 +389,7 @@ import UIKit
                             GKLocalPlayer.local.resolveConflictingSavedGames(matches, with: data) { _, resolveError in
                                 DispatchQueue.main.async {
                                     if let resolveError = resolveError {
-                                        print("Failed to resolve snapshot conflicts: \(resolveError.localizedDescription)")
+                                        print("Failed to resolve snapshot conflicts: \(describeGameKitError(resolveError))")
                                     }
                                     call.resolve(["data": decoded])
                                 }
