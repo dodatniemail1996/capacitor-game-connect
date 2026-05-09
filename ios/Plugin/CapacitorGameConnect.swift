@@ -325,9 +325,10 @@ import UIKit
         }
 
         GKLocalPlayer.local.saveGameData(data, withName: snapshotName) { _, error in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 if let error = error {
-                    call.reject("Save failed: \(describeGameKitError(error))")
+                    let details = self?.describeGameKitError(error) ?? error.localizedDescription
+                    call.reject("Save failed: \(details)")
                 } else {
                     call.resolve()
                 }
@@ -351,7 +352,7 @@ import UIKit
                 }
 
                 if let error = error {
-                    call.reject("Failed to load snapshots: \(describeGameKitError(error))")
+                    call.reject("Failed to load snapshots: \(self.describeGameKitError(error))")
                     return
                 }
 
@@ -372,9 +373,13 @@ import UIKit
                 } ?? matches[0]
 
                 selected.loadData { data, loadError in
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else {
+                            call.reject("Plugin instance no longer available")
+                            return
+                        }
                         if let loadError = loadError {
-                            call.reject("Error reading snapshot: \(describeGameKitError(loadError))")
+                            call.reject("Error reading snapshot: \(self.describeGameKitError(loadError))")
                             return
                         }
 
@@ -389,7 +394,7 @@ import UIKit
                             GKLocalPlayer.local.resolveConflictingSavedGames(matches, with: data) { _, resolveError in
                                 DispatchQueue.main.async {
                                     if let resolveError = resolveError {
-                                        print("Failed to resolve snapshot conflicts: \(describeGameKitError(resolveError))")
+                                        print("Failed to resolve snapshot conflicts: \(self.describeGameKitError(resolveError))")
                                     }
                                     call.resolve(["data": decoded])
                                 }
