@@ -28,6 +28,10 @@ public class CapacitorGameConnect {
         this.activity = activity;
     }
 
+    private final java.util.concurrent.atomic.AtomicBoolean isSigningIn = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private long lastSignInFailureTime = 0;
+    private static final long SIGN_IN_COOLDOWN_MS = 1000; // 1s cooldown to prevent zero-delay infinite loops while keeping user wait minimal
+
     /**
      * * Method to sign-in a user to Google Play Services
      *
@@ -36,37 +40,73 @@ public class CapacitorGameConnect {
      */
     public void signIn(PluginCall call, final SignInCallback resultCallback) {
         Log.i(TAG, "SignIn method called");
+
+        if (isSigningIn.get()) {
+            Log.w(TAG, "Sign-in already in progress. Skipping to avoid Binder transaction buffer overflow.");
+            resultCallback.error("Sign-in attempt already in progress");
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastSignInFailureTime < SIGN_IN_COOLDOWN_MS) {
+            Log.w(TAG, "Sign-in call throttled. Please wait before retrying.");
+            resultCallback.error("Sign-in throttled due to recent failure");
+            return;
+        }
+
+        if (!isSigningIn.compareAndSet(false, true)) {
+            resultCallback.error("Sign-in attempt already in progress");
+            return;
+        }
+
         GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(this.activity);
 
         gamesSignInClient
             .isAuthenticated()
             .addOnCompleteListener(
                 isAuthenticatedTask -> {
-                    boolean isAuthenticated = (isAuthenticatedTask.isSuccessful() && isAuthenticatedTask.getResult().isAuthenticated());
+                    boolean isAuthenticated = false;
+                    try {
+                        isAuthenticated = (isAuthenticatedTask.isSuccessful() 
+                            && isAuthenticatedTask.getResult() != null 
+                            && isAuthenticatedTask.getResult().isAuthenticated());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error checking authentication result", e);
+                    }
 
                     if (isAuthenticated) {
                         Log.i(TAG, "User is already authenticated");
+                        isSigningIn.set(false);
                         resultCallback.success();
                     } else {
                         gamesSignInClient
                                 .signIn()
                                 .addOnSuccessListener(signInResponse -> {
-                                    if (signInResponse.isAuthenticated()) {
+                                    isSigningIn.set(false);
+                                    if (signInResponse != null && signInResponse.isAuthenticated()) {
                                         Log.i(TAG, "Sign-in completed successful");
                                         resultCallback.success();
                                     } else {
+                                        lastSignInFailureTime = System.currentTimeMillis();
                                         Log.i(TAG, "Sign-in failed or cancelled");
                                         resultCallback.error("Sign-in failed or cancelled");
                                     }
                                 })
                                 .addOnFailureListener(e -> {
+                                    isSigningIn.set(false);
+                                    lastSignInFailureTime = System.currentTimeMillis();
                                     Log.i(TAG, "Sign-in failed with exception", e);
-                                    resultCallback.error(e.getMessage());
+                                    resultCallback.error(e != null ? e.getMessage() : "Sign-in failed");
                                 });
                     }
                 }
             )
-            .addOnFailureListener(e -> resultCallback.error(e.getMessage()));
+            .addOnFailureListener(e -> {
+                isSigningIn.set(false);
+                lastSignInFailureTime = System.currentTimeMillis();
+                Log.e(TAG, "isAuthenticated check failed", e);
+                resultCallback.error(e != null ? e.getMessage() : "Authentication check failed");
+            });
     }
 
     /**
@@ -192,7 +232,14 @@ public class CapacitorGameConnect {
             .isAuthenticated()
             .addOnCompleteListener(
                 isAuthenticatedTask -> {
-                    boolean isAuthenticated = (isAuthenticatedTask.isSuccessful() && isAuthenticatedTask.getResult().isAuthenticated());
+                    boolean isAuthenticated = false;
+                    try {
+                        isAuthenticated = (isAuthenticatedTask.isSuccessful() 
+                            && isAuthenticatedTask.getResult() != null 
+                            && isAuthenticatedTask.getResult().isAuthenticated());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error evaluating authentication task result", e);
+                    }
 
                     if (!isAuthenticated) {
                         call.reject("User is not authenticated with Google Play Games");
